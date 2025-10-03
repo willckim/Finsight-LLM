@@ -1,0 +1,32 @@
+﻿# --- Core training / HF / PEFT ---
+transformers>=4.43.0
+datasets>=2.20.0
+accelerate>=0.33.0
+peft>=0.11.1
+bitsandbytes>=0.43.0 ; platform_system == "Linux"
+# Windows note: bitsandbytes is Linux-first; if on Windows, you can train in WSL2 or skip 4-bit quant.
+
+# --- Metrics / eval ---
+evaluate>=0.4.2
+sacrebleu>=2.4.2
+rouge-score>=0.1.2
+scikit-learn>=1.5.0
+
+# --- Tokenization / misc ---
+sentencepiece>=0.2.0
+einops>=0.8.0
+numpy>=1.26.0
+pydantic>=2.8.0
+python-dotenv>=1.0.1
+
+# --- Inference / ONNX ---
+onnx>=1.16.0
+onnxruntime>=1.18.0
+optimum[onnxruntime-gpu]>=1.21.0
+
+# --- API ---
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# --- Lint / format (optional but recommended) ---
+ruff>=0.6.0

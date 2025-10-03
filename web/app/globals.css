@@ -1,0 +1,162 @@
+/* ===== Palette (clean, finance) ===== */
+:root{
+  --app-bg:#0b1220;
+  --app-95:rgba(11,18,32,.95);
+  --app-85:rgba(11,18,32,.85);
+
+  --panel:#11182a;
+  --panel-strong:#0f1629;
+  --panel-soft:#121a2e;
+
+  --border:#1f2a3a;
+  --border-soft:#203047;
+
+  --fg:#eaf1f7;
+  --muted:#9fb0bd;
+  --placeholder:#8aa0b1;
+
+  --accent-cyan:#22d3ee;
+  --accent-violet:#8b5cf6;
+
+  --success:#22c55e;
+  --danger:#ef4444;
+}
+
+/* ===== Base ===== */
+html,body{max-width:100vw;overflow-x:hidden;}
+body{
+  color:var(--fg);background:var(--app-bg);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  font-size:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+a{color:inherit;text-decoration:none;}
+
+/* ===== Layout helpers ===== */
+.bg-app-95{background:var(--app-95);}
+.bg-app-85{background:var(--app-85);}
+.border-app-border{border-color:var(--border);}
+.text-app-foreground{color:var(--fg);}
+.text-app-muted{color:var(--muted);}
+
+/* Background effects */
+.bg-radial-glow{
+  background:
+    radial-gradient(700px circle at 15% 15%, rgba(139,92,246,.12), transparent 60%),
+    radial-gradient(800px 600px at 85% 10%, rgba(34,211,238,.15), transparent 60%);
+}
+.bg-soft-grid{
+  background:
+    linear-gradient(to right, transparent 0, rgba(255,255,255,.05) 1px, transparent 1px),
+    linear-gradient(to bottom, transparent 0, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size:42px 42px;
+}
+.opacity-15{opacity:.15}
+
+/* ===== Cards ===== */
+.card{
+  background:linear-gradient(180deg, var(--panel), var(--panel-soft));
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:18px;
+  box-shadow:0 18px 48px -28px rgba(0,0,0,.7);
+}
+.card-title{
+  font-size:18px;font-weight:700;margin-bottom:6px;
+}
+.card-subtitle{
+  font-size:13px;color:var(--muted);margin-bottom:12px;
+}
+
+/* ===== Inputs ===== */
+.input-shell{
+  background:var(--panel-strong);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px;
+}
+.input-textarea{
+  min-height:132px;
+  width:100%;
+  resize:none;
+  border-radius:12px;
+  background:#0f1729;
+  color:var(--fg);
+  border:1px solid var(--border-soft);
+  padding:12px 14px;
+  font-size:15.5px; line-height:1.7;
+}
+.input-textarea::placeholder{color:var(--placeholder);}
+
+/* Controls */
+.controls-row{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-top:10px;
+}
+.pill{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--border);
+  border-radius:999px;
+  padding:6px 10px;
+  color:var(--muted);
+  font-size:12px;
+}
+.pill-input{
+  width:90px;background:#0e1630;border:1px solid var(--border);
+  color:var(--fg);border-radius:8px;padding:5px 8px;text-align:right;font-size:12px;
+}
+
+/* Button */
+.btn-primary{
+  display:inline-flex;align-items:center;gap:8px;
+  background-image:linear-gradient(135deg,var(--accent-cyan),var(--accent-violet));
+  color:#0b0b0b;font-weight:700;letter-spacing:.2px;
+  padding:10px 14px;border-radius:12px;border:1px solid transparent;
+  box-shadow:0 12px 40px -14px rgba(34,211,238,.45);
+  transition:opacity .15s ease, transform .02s ease;
+}
+.btn-primary:hover{opacity:.97}
+.btn-primary:active{transform:translateY(1px)}
+.btn-primary:disabled{opacity:.55;cursor:not-allowed}
+
+/* Alerts */
+.alert{
+  margin-top:10px;border-radius:10px;padding:10px 12px;font-size:13px;
+  border:1px solid var(--border);
+}
+.alert.error{background:rgba(239,68,68,.12);color:#fecaca;border-color:#7f1d1d}
+
+/* Result */
+.result-pre{
+  margin-top:6px;
+  background:#0f1729;
+  border:1px solid var(--border-soft);
+  border-radius:12px;
+  padding:12px 14px;
+  font-size:15px; line-height:1.7;
+  white-space:pre-wrap; word-break:break-word;
+}
+
+/* Chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px;}
+.chip{
+  border-radius:999px;border:1px solid var(--border);
+  background:#0e162b;color:var(--fg);
+  padding:8px 12px;font-size:13px;
+  transition:background .12s ease, border-color .12s ease, opacity .12s ease;
+}
+.chip:hover{background:#111b33;border-color:#2a3a53;opacity:.95}
+
+/* Pretty details */
+.bg-accent-gradient{
+  background-image:linear-gradient(135deg,var(--accent-cyan),var(--accent-violet));
+}
+.text-gradient{
+  background-image:linear-gradient(90deg,var(--accent-cyan),var(--accent-violet));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.shadow-accent{box-shadow:0 0 30px -10px var(--accent-cyan);}
+
+/* SR only */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0;}
