@@ -5,7 +5,13 @@ import { useState } from "react";
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
 
-type ChatResp = { provider: string; text: string } | { error: string };
+type ChatOK = { provider: string; text: string };
+type ChatErr = { error: string };
+type ChatResp = ChatOK | ChatErr;
+
+function isChatErr(r: ChatResp): r is ChatErr {
+  return (r as ChatErr).error !== undefined;
+}
 
 export default function Page() {
   const [prompt, setPrompt] = useState(
@@ -31,7 +37,10 @@ export default function Page() {
       body: JSON.stringify({
         // OpenAI-style messages; backend will join them for HF endpoint
         messages: [
-          { role: "system", content: `You are a finance expert. Keep responses under ~${maxNewTokens} tokens.` },
+          {
+            role: "system",
+            content: `You are a finance expert. Keep responses under ~${maxNewTokens} tokens.`,
+          },
           { role: "user", content: userContent },
         ],
       }),
@@ -50,7 +59,8 @@ export default function Page() {
     setResult("");
 
     try {
-      const CONTINUE = "\n\nContinue from where you left off. Do not repeat earlier text.";
+      const CONTINUE =
+        "\n\nContinue from where you left off. Do not repeat earlier text.";
       let acc = "";
       let rounds = 0;
       const MAX_ROUNDS = 3;
@@ -59,7 +69,7 @@ export default function Page() {
         const userMsg = rounds === 0 ? prompt : prompt + CONTINUE;
         const out = await callChat(userMsg);
 
-        if ("error" in out) throw new Error(out.error);
+        if (isChatErr(out)) throw new Error(out.error);
         const text = out.text ?? "";
         acc += (acc ? "\n" : "") + text;
         setResult(acc);
@@ -67,8 +77,9 @@ export default function Page() {
         if (endsCleanly(text)) break;
         rounds += 1;
       }
-    } catch (e: any) {
-      setErr(e?.message || "Request failed");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErr(msg || "Request failed");
     } finally {
       setLoading(false);
     }
@@ -84,7 +95,9 @@ export default function Page() {
             Ratios • Filings (10-K/10-Q) • Valuation (DCF, comps) • Statements
           </p>
 
-          <label htmlFor="prompt" className="sr-only">Prompt</label>
+          <label htmlFor="prompt" className="sr-only">
+            Prompt
+          </label>
           <div className="input-shell">
             <textarea
               id="prompt"
@@ -104,9 +117,10 @@ export default function Page() {
                   min={16}
                   max={4096}
                   value={maxNewTokens}
-                  onChange={(e) =>
-                    setMaxNewTokens(parseInt(e.target.value || "768", 10))
-                  }
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value || "768", 10);
+                    setMaxNewTokens(Number.isNaN(n) ? 768 : n);
+                  }}
                   className="pill-input"
                 />
               </div>
@@ -117,11 +131,13 @@ export default function Page() {
                 <select
                   aria-label="Model provider"
                   value={provider}
-                  onChange={(e) => setProvider(e.target.value as "finetuned" | "openai")}
+                  onChange={(e) =>
+                    setProvider(e.target.value as "finetuned" | "openai")
+                  }
                   className="pill-input"
                 >
-                  <option value="finetuned">Fine-tuned</option>
-                  <option value="openai">OpenAI</option>
+                <option value="finetuned">Fine-tuned</option>
+                <option value="openai">OpenAI</option>
                 </select>
               </div>
 
@@ -176,7 +192,10 @@ export default function Page() {
         <div className="card">
           <div className="card-title">Tips</div>
           <ul className="tips">
-            <li>Ask for comparisons: “P/E vs EV/EBITDA for capital-intensive firms.”</li>
+            <li>
+              Ask for comparisons: “P/E vs EV/EBITDA for capital-intensive
+              firms.”
+            </li>
             <li>Request examples: “Show PEG math with 20% growth.”</li>
             <li>Constrain output: “Explain free cash flow in 4 bullets.”</li>
           </ul>
@@ -188,7 +207,13 @@ export default function Page() {
 
 function SendIcon() {
   return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" className="-translate-y-[1px]">
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      aria-hidden="true"
+      className="-translate-y-[1px]"
+    >
       <path d="M2 21l20-9L2 3v7l14 2-14 2v7z" fill="currentColor" />
     </svg>
   );
