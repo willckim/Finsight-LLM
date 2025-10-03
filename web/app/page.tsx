@@ -2,51 +2,45 @@
 
 import { useState } from "react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
 
-type InferResponse = {
-  completion?: string;
-  finish_reason?: "stop" | "length" | string;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
-  [k: string]: any; // tolerate extra fields
-};
+type ChatResp = { provider: string; text: string } | { error: string };
 
 export default function Page() {
   const [prompt, setPrompt] = useState(
     "Explain the difference between P/E and PEG with a simple example."
   );
-  const [maxNewTokens, setMaxNewTokens] = useState(768); // ↑ default for longer finance answers
+  const [maxNewTokens, setMaxNewTokens] = useState(768);
   const [result, setResult] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
+  const [provider, setProvider] = useState<"finetuned" | "openai">("finetuned");
 
   function endsCleanly(s: string) {
-    // ends with ., !, ?, or closing quote/bracket after punctuation
     return /[.?!]["')\]]?\s*$/.test(s.trim());
   }
 
-  async function callInfer(body: { prompt: string; max_new_tokens: number }) {
-    const res = await fetch(`${API_URL}/infer`, {
+  async function callChat(userContent: string) {
+    const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": "application/json",
+        "x-llm": provider, // "finetuned" | "openai"
+      },
+      body: JSON.stringify({
+        // OpenAI-style messages; backend will join them for HF endpoint
+        messages: [
+          { role: "system", content: `You are a finance expert. Keep responses under ~${maxNewTokens} tokens.` },
+          { role: "user", content: userContent },
+        ],
+      }),
     });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`${res.status} ${res.statusText}: ${text}`);
     }
-    const json = (await res.json()) as InferResponse;
-    const text =
-      typeof json.completion === "string"
-        ? json.completion
-        : JSON.stringify(json);
-    const reason = json.finish_reason;
-    return { text, reason };
+    return (await res.json()) as ChatResp;
   }
 
   async function run() {
@@ -57,25 +51,20 @@ export default function Page() {
 
     try {
       const CONTINUE = "\n\nContinue from where you left off. Do not repeat earlier text.";
-      const CAP = Math.max(128, maxNewTokens); // never below 128
       let acc = "";
       let rounds = 0;
-      const MAX_ROUNDS = 3; // original + up to 2 continuations
+      const MAX_ROUNDS = 3;
 
       while (rounds < MAX_ROUNDS) {
-        const isFirst = rounds === 0;
-        const payload = {
-          prompt: isFirst ? prompt : prompt + CONTINUE,
-          max_new_tokens: CAP,
-        };
+        const userMsg = rounds === 0 ? prompt : prompt + CONTINUE;
+        const out = await callChat(userMsg);
 
-        const { text, reason } = await callInfer(payload);
+        if ("error" in out) throw new Error(out.error);
+        const text = out.text ?? "";
         acc += (acc ? "\n" : "") + text;
         setResult(acc);
 
-        // stop if not length-limited OR looks like a natural sentence end
-        if (reason !== "length" || endsCleanly(text)) break;
-
+        if (endsCleanly(text)) break;
         rounds += 1;
       }
     } catch (e: any) {
@@ -89,7 +78,6 @@ export default function Page() {
     <div className="grid gap-6 md:grid-cols-[1.15fr_1fr]">
       {/* Left column */}
       <section className="space-y-6">
-        {/* Hero card */}
         <div className="card">
           <div className="card-title">Ask a Finance Question</div>
           <p className="card-subtitle">
@@ -123,6 +111,20 @@ export default function Page() {
                 />
               </div>
 
+              {/* Model picker */}
+              <div className="pill">
+                Model
+                <select
+                  aria-label="Model provider"
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value as "finetuned" | "openai")}
+                  className="pill-input"
+                >
+                  <option value="finetuned">Fine-tuned</option>
+                  <option value="openai">OpenAI</option>
+                </select>
+              </div>
+
               <button
                 onClick={run}
                 disabled={loading || !prompt.trim()}
@@ -137,7 +139,6 @@ export default function Page() {
           </div>
         </div>
 
-        {/* Quick prompts */}
         <div className="card">
           <div className="card-title">Quick Finance Prompts</div>
           <div className="chips">

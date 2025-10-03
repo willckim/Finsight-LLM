@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python-version
+.env
+.venv
+venv/
+node_modules/
+.next/
+models/
+data/
