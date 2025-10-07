@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000").replace(/\/$/, "");
+const API_BASE = ""; // so fetch goes to "/api/chat"
+
+// Match your HF Endpoint settings
+const SERVER_MAX_INPUT = 3072;
+const SERVER_MAX_TOTAL = 4096;
+const SERVER_MAX_NEW = SERVER_MAX_TOTAL - SERVER_MAX_INPUT; // 1024
 
 type ChatOK = { provider: string; text: string };
 type ChatErr = { error: string };
@@ -17,7 +21,7 @@ export default function Page() {
   const [prompt, setPrompt] = useState(
     "Explain the difference between P/E and PEG with a simple example."
   );
-  const [maxNewTokens, setMaxNewTokens] = useState(768);
+  const [maxNewTokens, setMaxNewTokens] = useState(768); // UI default
   const [result, setResult] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
@@ -27,7 +31,10 @@ export default function Page() {
     return /[.?!]["')\]]?\s*$/.test(s.trim());
   }
 
-  async function callChat(userContent: string) {
+  async function callChat(userContent: string, requestedMaxNew: number) {
+    // Clamp to server-safe budget
+    const safeMaxNew = Math.max(16, Math.min(SERVER_MAX_NEW, Math.floor(requestedMaxNew)));
+
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST",
       headers: {
@@ -35,16 +42,17 @@ export default function Page() {
         "x-llm": provider, // "finetuned" | "openai"
       },
       body: JSON.stringify({
-        // OpenAI-style messages; backend will join them for HF endpoint
         messages: [
           {
             role: "system",
-            content: `You are a finance expert. Keep responses under ~${maxNewTokens} tokens.`,
+            content: `You are a finance expert. Keep responses under ~${safeMaxNew} tokens.`,
           },
           { role: "user", content: userContent },
         ],
+        max_new_tokens: safeMaxNew, // pass through to API route
       }),
     });
+
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`${res.status} ${res.statusText}: ${text}`);
@@ -67,7 +75,7 @@ export default function Page() {
 
       while (rounds < MAX_ROUNDS) {
         const userMsg = rounds === 0 ? prompt : prompt + CONTINUE;
-        const out = await callChat(userMsg);
+        const out = await callChat(userMsg, maxNewTokens);
 
         if (isChatErr(out)) throw new Error(out.error);
         const text = out.text ?? "";
@@ -95,9 +103,7 @@ export default function Page() {
             Ratios • Filings (10-K/10-Q) • Valuation (DCF, comps) • Statements
           </p>
 
-          <label htmlFor="prompt" className="sr-only">
-            Prompt
-          </label>
+          <label htmlFor="prompt" className="sr-only">Prompt</label>
           <div className="input-shell">
             <textarea
               id="prompt"
@@ -110,16 +116,20 @@ export default function Page() {
 
             <div className="controls-row">
               <div className="pill">
-                Max tokens
+                Max new tokens
                 <input
                   aria-label="Max new tokens"
                   type="number"
                   min={16}
-                  max={4096}
+                  max={SERVER_MAX_NEW}  // 1024
                   value={maxNewTokens}
                   onChange={(e) => {
                     const n = parseInt(e.target.value || "768", 10);
-                    setMaxNewTokens(Number.isNaN(n) ? 768 : n);
+                    const clamped = Math.max(
+                      16,
+                      Math.min(SERVER_MAX_NEW, Number.isNaN(n) ? 768 : n)
+                    );
+                    setMaxNewTokens(clamped);
                   }}
                   className="pill-input"
                 />
@@ -136,8 +146,8 @@ export default function Page() {
                   }
                   className="pill-input"
                 >
-                <option value="finetuned">Fine-tuned</option>
-                <option value="openai">OpenAI</option>
+                  <option value="finetuned">Fine-tuned</option>
+                  <option value="openai">OpenAI</option>
                 </select>
               </div>
 
@@ -152,6 +162,9 @@ export default function Page() {
             </div>
 
             {err && <div className="alert error">{err}</div>}
+            <p className="card-subtitle">
+              Server limits: input ≤ {SERVER_MAX_INPUT}, total ≤ {SERVER_MAX_TOTAL}, so new ≤ {SERVER_MAX_NEW}.
+            </p>
           </div>
         </div>
 
@@ -192,10 +205,7 @@ export default function Page() {
         <div className="card">
           <div className="card-title">Tips</div>
           <ul className="tips">
-            <li>
-              Ask for comparisons: “P/E vs EV/EBITDA for capital-intensive
-              firms.”
-            </li>
+            <li>Ask for comparisons: “P/E vs EV/EBITDA for capital-intensive firms.”</li>
             <li>Request examples: “Show PEG math with 20% growth.”</li>
             <li>Constrain output: “Explain free cash flow in 4 bullets.”</li>
           </ul>
