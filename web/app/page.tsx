@@ -10,7 +10,7 @@ const SERVER_MAX_TOTAL = 4096;
 const SERVER_MAX_NEW = SERVER_MAX_TOTAL - SERVER_MAX_INPUT; // 1024
 
 // Keep history light: system + last N messages
-const MAX_HISTORY_TURNS = 12; // user/assistant messages (not counting system)
+const MAX_HISTORY_TURNS = 12;
 
 type Role = "system" | "user" | "assistant";
 type Message = { role: Role; content: string };
@@ -19,21 +19,22 @@ type ChatOK = { provider: string; text: string };
 type ChatErr = { error: string };
 type ChatResp = ChatOK | ChatErr;
 
-const msg = (role: Role, content: string): Message => ({ role, content });
 const isChatErr = (r: ChatResp): r is ChatErr => (r as ChatErr).error !== undefined;
+const msg = (role: Role, content: string): Message => ({ role, content });
+
+const SYSTEM_PROMPT =
+  "You are a finance expert. Keep responses concise and helpful.";
 
 function trimHistory(messages: Message[]): Message[] {
-  const system = messages.find((m) => m.role === "system") ?? msg("system", "You are a finance expert.");
+  const system = messages.find((m) => m.role === "system") ?? msg("system", SYSTEM_PROMPT);
   const rest = messages.filter((m) => m.role !== "system");
   const trimmed = rest.slice(-MAX_HISTORY_TURNS);
   return [system, ...trimmed];
 }
 
 export default function Page() {
-  const [messages, setMessages] = useState<Message[]>([
-    msg("system", "You are a finance expert. Keep responses concise and helpful."),
-    msg("user", "Explain the difference between P/E and PEG with a simple example."),
-  ]);
+  // ⬇️ Start BLANK (only system lives in state implicitly via trimHistory)
+  const [messages, setMessages] = useState<Message[]>([msg("system", SYSTEM_PROMPT)]);
   const [prompt, setPrompt] = useState("");
   const [maxNewTokens, setMaxNewTokens] = useState(512);
   const [provider, setProvider] = useState<"finetuned" | "openai">("finetuned");
@@ -64,51 +65,51 @@ export default function Page() {
     setErr("");
 
     try {
-      // append user message
       const withUser = [...messages, msg("user", prompt)];
       const history = trimHistory(withUser);
       setMessages(withUser);
 
-      // call backend
       const out = await callChat(history, maxNewTokens);
       if (isChatErr(out)) throw new Error(out.error);
 
-      // append assistant message
       const text = out.text ?? "";
       setMessages((prev) => [...prev, msg("assistant", text)]);
       setPrompt("");
     } catch (e: unknown) {
-      const m = e instanceof Error ? e.message : String(e);
-      setErr(m || "Request failed");
+      setErr(e instanceof Error ? e.message : String(e) || "Request failed");
     } finally {
       setLoading(false);
     }
   }
 
-  function resetChat() {
-    setMessages([
-      msg("system", "You are a finance expert. Keep responses concise and helpful."),
-      msg("user", "Explain the difference between P/E and PEG with a simple example."),
-    ]);
+  function newChat() {
+    // Reset to only the system message (blank conversation)
+    setMessages([msg("system", SYSTEM_PROMPT)]);
     setPrompt("");
     setErr("");
   }
 
-  async function copyLatest() {
-    const last = [...messages].reverse().find((m) => m.role === "assistant");
-    if (last?.content) {
-      await navigator.clipboard.writeText(last.content);
-    }
+  function deleteMessageAt(index: number) {
+    // Don’t allow removing the system message
+    setMessages((prev) => prev.filter((_, i) => i !== index || prev[i].role === "system"));
   }
 
-  // Render list (compact = only latest assistant; else full thread without system)
+  async function copyLatest() {
+    const last = [...messages].reverse().find((m) => m.role === "assistant");
+    if (last?.content) await navigator.clipboard.writeText(last.content);
+  }
+
+  // Build list for rendering with original indices so delete works
   const rendered = (() => {
-    const nonSystem = messages.filter((m) => m.role !== "system");
+    const list = messages
+      .map((m, idx) => ({ m, idx }))
+      .filter((x) => x.m.role !== "system");
+
     if (compactView) {
-      const latest = [...nonSystem].reverse().find((m) => m.role === "assistant");
+      const latest = [...list].reverse().find((x) => x.m.role === "assistant");
       return latest ? [latest] : [];
     }
-    return nonSystem;
+    return list;
   })();
 
   return (
@@ -127,7 +128,7 @@ export default function Page() {
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={6}
-              placeholder="e.g., DCF in 5 steps."
+              placeholder="e.g., P/E vs PEG — when is PEG better?"
               className="input-textarea"
               onKeyDown={(e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === "Enter") run();
@@ -145,7 +146,10 @@ export default function Page() {
                   value={maxNewTokens}
                   onChange={(e) => {
                     const n = parseInt(e.target.value || "512", 10);
-                    const clamped = Math.max(16, Math.min(SERVER_MAX_NEW, Number.isNaN(n) ? 512 : n));
+                    const clamped = Math.max(
+                      16,
+                      Math.min(SERVER_MAX_NEW, Number.isNaN(n) ? 512 : n)
+                    );
                     setMaxNewTokens(clamped);
                   }}
                   className="pill-input"
@@ -157,7 +161,9 @@ export default function Page() {
                 <select
                   aria-label="Model provider"
                   value={provider}
-                  onChange={(e) => setProvider(e.target.value as "finetuned" | "openai")}
+                  onChange={(e) =>
+                    setProvider(e.target.value as "finetuned" | "openai")
+                  }
                   className="pill-input"
                 >
                   <option value="finetuned">Fine-tuned</option>
@@ -165,11 +171,15 @@ export default function Page() {
                 </select>
               </div>
 
-              <button onClick={run} disabled={loading || !prompt.trim()} className="btn-primary">
+              <button
+                onClick={run}
+                disabled={loading || !prompt.trim()}
+                className="btn-primary"
+              >
                 {loading ? "Running…" : "Ask FinSight"}
               </button>
 
-              <button onClick={resetChat} type="button" className="btn-secondary">
+              <button onClick={newChat} type="button" className="btn-secondary">
                 New chat
               </button>
 
@@ -216,14 +226,29 @@ export default function Page() {
       <section className="space-y-6">
         <div className="card">
           <div className="card-title">Conversation</div>
-          {!rendered.length && !loading && <p className="card-subtitle">Your chat will appear here.</p>}
+
+          {/* If empty (system only), show placeholder */}
+          {messages.filter((m) => m.role !== "system").length === 0 && !loading && (
+            <p className="card-subtitle">Start a new conversation above.</p>
+          )}
           {loading && <p className="card-subtitle">Generating…</p>}
 
           <div className="result-pre">
-            {rendered.map((m, i) => (
-              <div key={i}>
-                <strong>{m.role === "user" ? "You" : "FinSight"}:</strong> {m.content}
-                {i < rendered.length - 1 && <hr style={{ opacity: 0.15, margin: "8px 0" }} />}
+            {rendered.map(({ m, idx }, i) => (
+              <div key={`${idx}-${i}`} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <strong>{m.role === "user" ? "You" : "FinSight"}:</strong> {m.content}
+                </div>
+                {/* Small delete button for each non-system message */}
+                <button
+                  className="btn-secondary"
+                  style={{ padding: "2px 8px", lineHeight: 1 }}
+                  onClick={() => deleteMessageAt(idx)}
+                  aria-label="Delete message"
+                  title="Delete this message"
+                >
+                  ×
+                </button>
               </div>
             ))}
           </div>
@@ -232,10 +257,10 @@ export default function Page() {
         <div className="card">
           <div className="card-title">Tips</div>
           <ul className="tips">
+            <li>Submit with ⌘/Ctrl + Enter.</li>
             <li>Ask for comparisons: “P/E vs EV/EBITDA for capital-intensive firms.”</li>
             <li>Request examples: “Show PEG math with 20% growth.”</li>
             <li>Constrain output: “Explain free cash flow in 4 bullets.”</li>
-            <li>Submit with ⌘/Ctrl + Enter.</li>
           </ul>
         </div>
       </section>
