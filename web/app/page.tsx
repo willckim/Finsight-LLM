@@ -9,6 +9,9 @@ const SERVER_MAX_INPUT = 3072;
 const SERVER_MAX_TOTAL = 4096;
 const SERVER_MAX_NEW = SERVER_MAX_TOTAL - SERVER_MAX_INPUT; // 1024
 
+type Role = "system" | "user" | "assistant";
+type Message = { role: Role; content: string };
+
 type ChatOK = { provider: string; text: string };
 type ChatErr = { error: string };
 type ChatResp = ChatOK | ChatErr;
@@ -17,11 +20,16 @@ function isChatErr(r: ChatResp): r is ChatErr {
   return (r as ChatErr).error !== undefined;
 }
 
+const msg = (role: Role, content: string): Message => ({ role, content });
+
 export default function Page() {
-  const [prompt, setPrompt] = useState(
-    "Explain the difference between P/E and PEG with a simple example."
-  );
-  const [maxNewTokens, setMaxNewTokens] = useState(768); // UI default
+  const [messages, setMessages] = useState<Message[]>([
+    msg("system", "You are a finance expert. Keep responses concise and helpful."),
+    msg("user", "Explain the difference between P/E and PEG with a simple example."),
+  ]);
+
+  const [prompt, setPrompt] = useState("");
+  const [maxNewTokens, setMaxNewTokens] = useState(512);
   const [result, setResult] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
@@ -31,25 +39,18 @@ export default function Page() {
     return /[.?!]["')\]]?\s*$/.test(s.trim());
   }
 
-  async function callChat(userContent: string, requestedMaxNew: number) {
-    // Clamp to server-safe budget
+  async function callChat(history: Message[], requestedMaxNew: number) {
     const safeMaxNew = Math.max(16, Math.min(SERVER_MAX_NEW, Math.floor(requestedMaxNew)));
 
     const res = await fetch(`${API_BASE}/api/chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-llm": provider, // "finetuned" | "openai"
+        "x-llm": provider,
       },
       body: JSON.stringify({
-        messages: [
-          {
-            role: "system",
-            content: `You are a finance expert. Keep responses under ~${safeMaxNew} tokens.`,
-          },
-          { role: "user", content: userContent },
-        ],
-        max_new_tokens: safeMaxNew, // pass through to API route
+        messages: history,
+        max_new_tokens: safeMaxNew,
       }),
     });
 
@@ -64,30 +65,23 @@ export default function Page() {
     if (!prompt.trim() || loading) return;
     setLoading(true);
     setErr("");
-    setResult("");
 
     try {
-      const CONTINUE =
-        "\n\nContinue from where you left off. Do not repeat earlier text.";
-      let acc = "";
-      let rounds = 0;
-      const MAX_ROUNDS = 3;
+      // append new user message
+      const newMessages: Message[] = [...messages, msg("user", prompt)];
+      setMessages(newMessages);
 
-      while (rounds < MAX_ROUNDS) {
-        const userMsg = rounds === 0 ? prompt : prompt + CONTINUE;
-        const out = await callChat(userMsg, maxNewTokens);
+      const out = await callChat(newMessages, maxNewTokens);
+      if (isChatErr(out)) throw new Error(out.error);
 
-        if (isChatErr(out)) throw new Error(out.error);
-        const text = out.text ?? "";
-        acc += (acc ? "\n" : "") + text;
-        setResult(acc);
-
-        if (endsCleanly(text)) break;
-        rounds += 1;
-      }
+      const text = out.text ?? "";
+      const updated: Message[] = [...newMessages, msg("assistant", text)];
+      setMessages(updated);
+      setResult((prev) => prev + (prev ? "\n\n" : "") + text);
+      setPrompt("");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setErr(msg || "Request failed");
+      const msgText = e instanceof Error ? e.message : String(e);
+      setErr(msgText || "Request failed");
     } finally {
       setLoading(false);
     }
@@ -103,14 +97,13 @@ export default function Page() {
             Ratios • Filings (10-K/10-Q) • Valuation (DCF, comps) • Statements
           </p>
 
-          <label htmlFor="prompt" className="sr-only">Prompt</label>
           <div className="input-shell">
             <textarea
               id="prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={6}
-              placeholder="e.g., Walk me through DCF like I’m in high school."
+              placeholder="e.g., What does a low PEG ratio mean?"
               className="input-textarea"
             />
 
@@ -121,13 +114,13 @@ export default function Page() {
                   aria-label="Max new tokens"
                   type="number"
                   min={16}
-                  max={SERVER_MAX_NEW}  // 1024
+                  max={SERVER_MAX_NEW}
                   value={maxNewTokens}
                   onChange={(e) => {
-                    const n = parseInt(e.target.value || "768", 10);
+                    const n = parseInt(e.target.value || "512", 10);
                     const clamped = Math.max(
                       16,
-                      Math.min(SERVER_MAX_NEW, Number.isNaN(n) ? 768 : n)
+                      Math.min(SERVER_MAX_NEW, Number.isNaN(n) ? 512 : n)
                     );
                     setMaxNewTokens(clamped);
                   }}
@@ -135,7 +128,6 @@ export default function Page() {
                 />
               </div>
 
-              {/* Model picker */}
               <div className="pill">
                 Model
                 <select
@@ -194,12 +186,21 @@ export default function Page() {
       {/* Right column */}
       <section className="space-y-6">
         <div className="card">
-          <div className="card-title">Response</div>
-          {!result && !loading && (
-            <p className="card-subtitle">Your answer will appear here.</p>
+          <div className="card-title">Conversation</div>
+          {!messages.length && !loading && (
+            <p className="card-subtitle">Your chat will appear here.</p>
           )}
           {loading && <p className="card-subtitle">Generating…</p>}
-          {result && <pre className="result-pre">{result}</pre>}
+          <div className="result-pre">
+            {messages
+              .filter((m) => m.role !== "system")
+              .map((m, i) => (
+                <p key={i}>
+                  <strong>{m.role === "user" ? "You" : "FinSight"}:</strong>{" "}
+                  {m.content}
+                </p>
+              ))}
+          </div>
         </div>
 
         <div className="card">
