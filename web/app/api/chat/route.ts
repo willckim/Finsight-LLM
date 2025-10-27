@@ -16,7 +16,7 @@ function cleanResponse(text: string): string {
   // Remove "assistant:" prefix if present
   let cleaned = text.split("assistant:").pop()?.trim() ?? text.trim();
   
-  // Remove trailing chat format markers (user:, system:, assistant:, etc.)
+  // Remove trailing chat format markers (case-insensitive)
   cleaned = cleaned
     .replace(/\s*\n?\s*(user|User|USER):\s*$/gi, '')
     .replace(/\s*\n?\s*(system|System|SYSTEM):\s*$/gi, '')
@@ -58,8 +58,8 @@ export async function POST(req: NextRequest) {
           top_p: 0.9,
           do_sample: true,
           repetition_penalty: 1.1,
-          // Stop tokens to prevent chat format leakage
-          stop: ["\nuser:", "\nUser:", "\nUSER:", "\nsystem:", "\nSystem:", "\nSYSTEM:", "\nassistant:", "\nAssistant:"],
+          // HF only allows 4 stop sequences - using the most common ones
+          stop: ["\nuser:", "\nUser:", "\nsystem:", "\nSystem:"],
         },
       }),
     });
