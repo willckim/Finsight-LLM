@@ -6,11 +6,24 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const DEFAULT_PROVIDER = (process.env.PROVIDER_DEFAULT || "finetuned").toLowerCase();
 
-// Increased to avoid response cutoff
 const SERVER_MAX_NEW = 2048;
 
 function joinMessages(messages: { role: string; content: string }[]) {
   return messages.map((m) => `${m.role}: ${m.content}`).join("\n") + "\nassistant:";
+}
+
+function cleanResponse(text: string): string {
+  // Remove "assistant:" prefix if present
+  let cleaned = text.split("assistant:").pop()?.trim() ?? text.trim();
+  
+  // Remove trailing chat format markers (user:, system:, assistant:, etc.)
+  cleaned = cleaned
+    .replace(/\s*\n?\s*(user|User|USER):\s*$/gi, '')
+    .replace(/\s*\n?\s*(system|System|SYSTEM):\s*$/gi, '')
+    .replace(/\s*\n?\s*(assistant|Assistant|ASSISTANT):\s*$/gi, '')
+    .trim();
+  
+  return cleaned;
 }
 
 export async function POST(req: NextRequest) {
@@ -45,7 +58,8 @@ export async function POST(req: NextRequest) {
           top_p: 0.9,
           do_sample: true,
           repetition_penalty: 1.1,
-          stop: ["\nuser:", "\nUser:", "\nsystem:", "\nSystem:"],
+          // Stop tokens to prevent chat format leakage
+          stop: ["\nuser:", "\nUser:", "\nUSER:", "\nsystem:", "\nSystem:", "\nSYSTEM:", "\nassistant:", "\nAssistant:"],
         },
       }),
     });
@@ -62,7 +76,7 @@ export async function POST(req: NextRequest) {
         ? String(out[0].generated_text)
         : (out?.generated_text ?? "")) as string;
 
-    const cleaned = text.split("assistant:").pop()?.trim() ?? text.trim();
+    const cleaned = cleanResponse(text);
 
     return Response.json({ provider: "finetuned", text: cleaned });
   }
