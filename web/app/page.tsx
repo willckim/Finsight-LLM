@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 
-const API_BASE = ""; // so fetch goes to "/api/chat"
+const API_BASE = "";
 
-// Match your HF Endpoint settings
-const SERVER_MAX_INPUT = 3072;
+// ⚠️ UPDATED LIMITS - matches route.ts
+const SERVER_MAX_INPUT = 2048;
 const SERVER_MAX_TOTAL = 4096;
-const SERVER_MAX_NEW = SERVER_MAX_TOTAL - SERVER_MAX_INPUT; // 1024
+const SERVER_MAX_NEW = 2048;  // DOUBLED from 1024
 
-// Keep history light: system + last N messages
 const MAX_HISTORY_TURNS = 12;
 
 type Role = "system" | "user" | "assistant";
@@ -33,10 +32,9 @@ function trimHistory(messages: Message[]): Message[] {
 }
 
 export default function Page() {
-  // ⬇️ Start BLANK (only system lives in state implicitly via trimHistory)
   const [messages, setMessages] = useState<Message[]>([msg("system", SYSTEM_PROMPT)]);
   const [prompt, setPrompt] = useState("");
-  const [maxNewTokens, setMaxNewTokens] = useState(512);
+  const [maxNewTokens, setMaxNewTokens] = useState(1024);  // Higher default
   const [provider, setProvider] = useState<"finetuned" | "openai">("finetuned");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
@@ -83,14 +81,12 @@ export default function Page() {
   }
 
   function newChat() {
-    // Reset to only the system message (blank conversation)
     setMessages([msg("system", SYSTEM_PROMPT)]);
     setPrompt("");
     setErr("");
   }
 
   function deleteMessageAt(index: number) {
-    // Don’t allow removing the system message
     setMessages((prev) => prev.filter((_, i) => i !== index || prev[i].role === "system"));
   }
 
@@ -99,7 +95,6 @@ export default function Page() {
     if (last?.content) await navigator.clipboard.writeText(last.content);
   }
 
-  // Build list for rendering with original indices so delete works
   const rendered = (() => {
     const list = messages
       .map((m, idx) => ({ m, idx }))
@@ -145,10 +140,10 @@ export default function Page() {
                   max={SERVER_MAX_NEW}
                   value={maxNewTokens}
                   onChange={(e) => {
-                    const n = parseInt(e.target.value || "512", 10);
+                    const n = parseInt(e.target.value || "1024", 10);
                     const clamped = Math.max(
                       16,
-                      Math.min(SERVER_MAX_NEW, Number.isNaN(n) ? 512 : n)
+                      Math.min(SERVER_MAX_NEW, Number.isNaN(n) ? 1024 : n)
                     );
                     setMaxNewTokens(clamped);
                   }}
@@ -227,7 +222,6 @@ export default function Page() {
         <div className="card">
           <div className="card-title">Conversation</div>
 
-          {/* If empty (system only), show placeholder */}
           {messages.filter((m) => m.role !== "system").length === 0 && !loading && (
             <p className="card-subtitle">Start a new conversation above.</p>
           )}
@@ -239,7 +233,6 @@ export default function Page() {
                 <div className="min-w-0">
                   <strong>{m.role === "user" ? "You" : "FinSight"}:</strong> {m.content}
                 </div>
-                {/* Small delete button for each non-system message */}
                 <button
                   className="btn-secondary"
                   style={{ padding: "2px 8px", lineHeight: 1 }}
@@ -258,9 +251,9 @@ export default function Page() {
           <div className="card-title">Tips</div>
           <ul className="tips">
             <li>Submit with ⌘/Ctrl + Enter.</li>
-            <li>Ask for comparisons: “P/E vs EV/EBITDA for capital-intensive firms.”</li>
-            <li>Request examples: “Show PEG math with 20% growth.”</li>
-            <li>Constrain output: “Explain free cash flow in 4 bullets.”</li>
+            <li>Ask for comparisons: "P/E vs EV/EBITDA for capital-intensive firms."</li>
+            <li>Request examples: "Show PEG math with 20% growth."</li>
+            <li>Constrain output: "Explain free cash flow in 4 bullets."</li>
           </ul>
         </div>
       </section>
