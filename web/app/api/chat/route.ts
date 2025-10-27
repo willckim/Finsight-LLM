@@ -6,10 +6,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const DEFAULT_PROVIDER = (process.env.PROVIDER_DEFAULT || "finetuned").toLowerCase();
 
-// ⚠️ INCREASE THESE LIMITS TO AVOID CUTOFF
-const SERVER_MAX_INPUT = 2048;    // Reduced input to allow more output
-const SERVER_MAX_TOTAL = 4096;
-const SERVER_MAX_NEW = 2048;      // DOUBLED from 1024 to 2048
+// Increased to avoid response cutoff
+const SERVER_MAX_NEW = 2048;
 
 function joinMessages(messages: { role: string; content: string }[]) {
   return messages.map((m) => `${m.role}: ${m.content}`).join("\n") + "\nassistant:";
@@ -20,14 +18,13 @@ export async function POST(req: NextRequest) {
   const messages = body?.messages ?? [];
   const provider = (req.headers.get("x-llm") || DEFAULT_PROVIDER).toLowerCase();
 
-  // Clamp requested max_new_tokens to stay within server budget
   const reqMaxNew = Number(body?.max_new_tokens ?? 512);
   const maxNew = Math.max(
     16,
     Math.min(SERVER_MAX_NEW, Number.isFinite(reqMaxNew) ? Math.floor(reqMaxNew) : 512)
   );
 
-  console.log(`Using max_new_tokens: ${maxNew}`); // Debug log
+  console.log(`Using max_new_tokens: ${maxNew}`);
 
   if (provider === "finetuned") {
     if (!HF_URL) {
@@ -44,11 +41,10 @@ export async function POST(req: NextRequest) {
         inputs: joinMessages(messages),
         parameters: {
           max_new_tokens: maxNew,
-          temperature: 0.7,       // Slightly higher for more natural responses
+          temperature: 0.7,
           top_p: 0.9,
           do_sample: true,
           repetition_penalty: 1.1,
-          // Add stop tokens to prevent runaway generation
           stop: ["\nuser:", "\nUser:", "\nsystem:", "\nSystem:"],
         },
       }),
@@ -61,19 +57,16 @@ export async function POST(req: NextRequest) {
     }
 
     const out = await r.json();
-    // TGI non-stream may return array or object; normalize:
     const text =
       (Array.isArray(out) && out[0]?.generated_text
         ? String(out[0].generated_text)
         : (out?.generated_text ?? "")) as string;
 
-    // If using a chat-style prompt format, trim any leading "assistant:"
     const cleaned = text.split("assistant:").pop()?.trim() ?? text.trim();
 
     return Response.json({ provider: "finetuned", text: cleaned });
   }
 
-  // OpenAI fallback
   if (!OPENAI_API_KEY) {
     return Response.json({ error: "OPENAI_API_KEY missing" }, { status: 500 });
   }

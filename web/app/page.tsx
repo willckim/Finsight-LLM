@@ -4,10 +4,9 @@ import { useState } from "react";
 
 const API_BASE = "";
 
-// ⚠️ UPDATED LIMITS - matches route.ts
 const SERVER_MAX_INPUT = 2048;
 const SERVER_MAX_TOTAL = 4096;
-const SERVER_MAX_NEW = 2048;  // DOUBLED from 1024
+const SERVER_MAX_NEW = 2048;
 
 const MAX_HISTORY_TURNS = 12;
 
@@ -34,7 +33,7 @@ function trimHistory(messages: Message[]): Message[] {
 export default function Page() {
   const [messages, setMessages] = useState<Message[]>([msg("system", SYSTEM_PROMPT)]);
   const [prompt, setPrompt] = useState("");
-  const [maxNewTokens, setMaxNewTokens] = useState(1024);  // Higher default
+  const [maxNewTokens, setMaxNewTokens] = useState(1024);
   const [provider, setProvider] = useState<"finetuned" | "openai">("finetuned");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
@@ -251,9 +250,9 @@ export default function Page() {
           <div className="card-title">Tips</div>
           <ul className="tips">
             <li>Submit with ⌘/Ctrl + Enter.</li>
-            <li>Ask for comparisons: "P/E vs EV/EBITDA for capital-intensive firms."</li>
-            <li>Request examples: "Show PEG math with 20% growth."</li>
-            <li>Constrain output: "Explain free cash flow in 4 bullets."</li>
+            <li>Ask for comparisons: {'"P/E vs EV/EBITDA for capital-intensive firms."'}</li>
+            <li>Request examples: {'"Show PEG math with 20% growth."'}</li>
+            <li>Constrain output: {'"Explain free cash flow in 4 bullets."'}</li>
           </ul>
         </div>
       </section>
